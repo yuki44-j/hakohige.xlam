@@ -1,0 +1,139 @@
+Dim rowNum As Integer, colNum As Integer, maxRow As Integer, maxCol As Integer
+Dim q1st, med, q3rd, iqr, minIdx, maxIdx
+
+Sub sortData()
+    If Range("B2").Value = "" Then
+        colNum = 1
+    Else
+        colNum = Range("A1").End(xlToRight).Column
+    End If
+    
+    Dim i As Integer
+    maxRow = 0
+    For i = 1 To colNum
+        rowNum = Cells(2, i).End(xlDown).row
+        Call Range(Cells(2, i), Cells(rowNum, i)).sort(Cells(1, i))
+        
+        If maxRow < rowNum Then
+            maxRow = rowNum
+        End If
+        
+    Next
+            
+    'Range("A60").Value = maxRow
+End Sub
+
+Sub graphData()
+    Dim idx As Integer, row As Integer, i As Integer, outRow As Integer
+    
+    For i = 1 To colNum
+        row = maxRow + 4
+        
+        rowNum = Cells(2, i).End(xlDown).row
+        q1st = WorksheetFunction.Quartile(Range(Cells(2, i), Cells(rowNum, i)), 1)
+        med = WorksheetFunction.Quartile(Range(Cells(2, i), Cells(rowNum, i)), 2)
+        q3rd = WorksheetFunction.Quartile(Range(Cells(2, i), Cells(rowNum, i)), 3)
+        iqr = q3rd - q1st
+        
+        Cells(row, i).Value = q1st
+        Cells(row + 1, i).Value = med - q1st
+        Cells(row + 2, i).Value = q3rd - med
+        
+        outRow = row + 3
+        row = row - 2
+        
+        For idx = 2 To rowNum
+            If Cells(idx, i).Value < q1st - iqr * 1.5 Then
+                Cells(outRow, i).Value = Cells(idx, i).Value
+                outRow = outRow + 1
+            Else
+                Cells(row, i).Value = q1st - Cells(idx, i).Value
+                row = row + 1
+                Exit For
+            End If
+            
+        Next idx
+    
+        For idx = rowNum To 2 Step -1
+            If Cells(idx, i).Value > q3rd + iqr * 1.5 Then
+                Cells(outRow, i).Value = Cells(idx, i).Value
+                outRow = outRow + 1
+            Else
+                Cells(row, i).Value = Cells(idx, i).Value - q3rd
+                Exit For
+            End If
+            
+        Next idx
+        
+    Next
+                
+End Sub
+
+Sub makeGraph()
+    Dim ch As Chart
+    Dim sRow As Integer, eRow As Integer
+    
+    sRow = maxRow + 4
+    eRow = Range("A1").SpecialCells(xlLastCell).row
+    
+    'If colNum < 3 Then
+        'colNum = 4
+    'End If
+        
+    Set ch = ActiveSheet.ChartObjects.Add(18, 18, 480, 320).Chart
+    
+    With ch
+        .ChartType = xlColumnStacked
+        .SetSourceData Range(Cells(sRow, 1), Cells(eRow, colNum))
+        .HasLegend = False
+        .PlotBy = xlRows
+        .SeriesCollection(1).XValues = Range(Cells(1, 1), Cells(1, colNum))
+        
+        Dim i As Integer
+        For i = 4 To eRow - sRow + 1
+            .SeriesCollection(i).AxisGroup = 2   '第2軸にする
+            .SeriesCollection(i).ChartType = xlLineMarkers
+            .SeriesCollection(i).Format.Line.Visible = msoFalse
+            .SeriesCollection(i).MarkerStyle = 8
+            .SeriesCollection(i).MarkerBackgroundColor = RGB(255, 255, 255) 'マーカー背景色
+            .SeriesCollection(i).MarkerForegroundColor = RGB(0, 0, 0) 'マーカー枠線色
+        Next
+
+        '箱を作る
+        For i = 1 To 3
+            .SeriesCollection(i).Format.Fill.Visible = msoFalse '系列1～3の背景色をなくす
+        Next
+        
+        For i = 2 To 3
+            .SeriesCollection(i).Select
+            With Selection.Format.Line '系列2,3の枠線を付ける
+                .Visible = msoTrue
+                .ForeColor.ObjectThemeColor = msoThemeColorText1
+                .ForeColor.TintAndShade = 0
+                .ForeColor.Brightness = 0
+            End With
+        Next
+        
+        '髭を作る
+        .SeriesCollection(3).HasErrorBars = True
+        .SeriesCollection(3).ErrorBar Direction:=xlY, Include:= _
+        xlPlusValues, Type:=xlCustom, Amount:=Range(Cells(sRow - 1, 1), Cells(sRow - 1, colNum))
+        .SeriesCollection(1).HasErrorBars = True
+        .SeriesCollection(1).ErrorBar Direction:=xlY, Include:= _
+        xlMinusValues, Type:=xlCustom, Amount:=0, MinusValues:=Range(Cells(sRow - 2, 1), Cells(sRow - 2, colNum))
+        
+        '軸の調整
+        .HasAxis(xlValue, 2) = False '非表示
+        
+    End With
+       
+        
+End Sub
+
+Sub graphMain()
+        
+    sortData
+    graphData
+    makeGraph
+    
+End Sub
